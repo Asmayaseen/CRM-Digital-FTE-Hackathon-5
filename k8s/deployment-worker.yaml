@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fte-message-processor
+  namespace: customer-success-fte
+  labels:
+    app: fte-message-processor
+    component: worker
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: fte-message-processor
+  template:
+    metadata:
+      labels:
+        app: fte-message-processor
+        component: worker
+    spec:
+      containers:
+        - name: fte-worker
+          image: your-registry/customer-success-fte:latest
+          command: ["python", "-m", "production.workers.message_processor"]
+          envFrom:
+            - configMapRef:
+                name: fte-config
+            - secretRef:
+                name: fte-secrets
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+      terminationGracePeriodSeconds: 60

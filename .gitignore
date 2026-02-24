@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+dist/
+*.egg-info/
+.eggs/
+*.so
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Secrets
+credentials/
+k8s/secrets.yaml
+*.key
+*.pem
+*.crt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+web-form/build/
+web-form/dist/
+
+# Next.js build output
+frontend/.next/
+frontend/out/
+frontend/.env.local
+
+# Docker
+*.log
+
+# Kafka / data
+kafka-data/
+postgres-data/

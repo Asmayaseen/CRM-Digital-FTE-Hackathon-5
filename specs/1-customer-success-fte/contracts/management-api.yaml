@@ -1,0 +1,305 @@
+openapi: "3.1.0"
+info:
+  title: Customer Success FTE — Management API
+  description: >
+    Internal management endpoints for health monitoring, customer lookup,
+    conversation history, and channel performance metrics.
+  version: "1.0.0"
+
+servers:
+  - url: https://support-api.yourdomain.com
+    description: Production
+  - url: http://localhost:8000
+    description: Local development
+
+paths:
+
+  /health:
+    get:
+      summary: Service health check
+      description: >
+        Returns the operational status of the API and all three channels.
+        Used by Kubernetes liveness and readiness probes.
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: healthy
+                timestamp: "2026-02-22T10:00:00Z"
+                channels:
+                  email: active
+                  whatsapp: active
+                  web_form: active
+
+  /conversations/{conversation_id}:
+    get:
+      summary: Get full conversation history
+      description: >
+        Returns the complete message thread for a conversation, including
+        all channels used, tool calls performed, and delivery statuses.
+        Used for agent review and escalation context.
+      operationId: getConversation
+      parameters:
+        - name: conversation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: "660e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Conversation found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetail'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /customers/lookup:
+    get:
+      summary: Look up a customer by email or phone
+      description: >
+        Finds a customer record across all channels. Provide either an email
+        address or a phone number (E.164 format). Returns the unified customer
+        profile and their interaction summary.
+      operationId: lookupCustomer
+      parameters:
+        - name: email
+          in: query
+          required: false
+          schema:
+            type: string
+            format: email
+          example: "jane@example.com"
+        - name: phone
+          in: query
+          required: false
+          schema:
+            type: string
+          example: "+12025551234"
+      responses:
+        '200':
+          description: Customer found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerProfile'
+        '400':
+          description: Neither email nor phone provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Customer not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /metrics/channels:
+    get:
+      summary: Get 24-hour channel performance metrics
+      description: >
+        Returns aggregated performance metrics for each channel over the last
+        24 hours. Used for daily management reports.
+      operationId: getChannelMetrics
+      responses:
+        '200':
+          description: Metrics available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelMetricsResponse'
+              example:
+                email:
+                  channel: email
+                  total_conversations: 42
+                  avg_sentiment: 0.74
+                  escalations: 6
+                  avg_latency_ms: 2340
+                whatsapp:
+                  channel: whatsapp
+                  total_conversations: 87
+                  avg_sentiment: 0.68
+                  escalations: 12
+                  avg_latency_ms: 1820
+                web_form:
+                  channel: web_form
+                  total_conversations: 23
+                  avg_sentiment: 0.81
+                  escalations: 3
+                  avg_latency_ms: 2100
+
+components:
+  schemas:
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+        - channels
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          example: healthy
+        timestamp:
+          type: string
+          format: date-time
+        channels:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [active, degraded, inactive]
+          example:
+            email: active
+            whatsapp: active
+            web_form: active
+
+    ConversationDetail:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        customer_id:
+          type: string
+          format: uuid
+        initial_channel:
+          type: string
+          enum: [email, whatsapp, web_form]
+        status:
+          type: string
+          enum: [active, resolved, escalated, closed]
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+        sentiment_score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          nullable: true
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageDetail'
+
+    MessageDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+          enum: [email, whatsapp, web_form]
+        direction:
+          type: string
+          enum: [inbound, outbound]
+        role:
+          type: string
+          enum: [customer, agent, system]
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        latency_ms:
+          type: integer
+          nullable: true
+        tokens_used:
+          type: integer
+          nullable: true
+        delivery_status:
+          type: string
+          enum: [pending, sent, delivered, failed]
+        tool_calls:
+          type: array
+          items:
+            type: object
+
+    CustomerProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        identifiers:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              value:
+                type: string
+        conversation_count:
+          type: integer
+          description: Total number of conversations across all channels
+        last_contact:
+          type: string
+          format: date-time
+          nullable: true
+
+    ChannelMetricsResponse:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/ChannelMetric'
+
+    ChannelMetric:
+      type: object
+      properties:
+        channel:
+          type: string
+          enum: [email, whatsapp, web_form]
+        total_conversations:
+          type: integer
+        avg_sentiment:
+          type: number
+          format: float
+          nullable: true
+        escalations:
+          type: integer
+        avg_latency_ms:
+          type: number
+          format: float
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string

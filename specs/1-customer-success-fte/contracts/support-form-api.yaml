@@ -1,0 +1,229 @@
+openapi: "3.1.0"
+info:
+  title: Customer Success FTE — Support Form API
+  description: >
+    Endpoints for the web support form channel: submitting tickets and
+    polling ticket status/responses. These endpoints are consumed by the
+    standalone SupportForm React component.
+  version: "1.0.0"
+
+servers:
+  - url: https://support-api.yourdomain.com
+    description: Production
+  - url: http://localhost:8000
+    description: Local development
+
+paths:
+
+  /support/submit:
+    post:
+      summary: Submit a support request via web form
+      description: >
+        Validates the form submission, creates a support ticket, publishes to
+        Kafka for agent processing, and returns a ticket ID for status polling.
+        The agent processes the ticket asynchronously and sends a response to
+        the customer's email address.
+      operationId: submitSupportForm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupportFormSubmission'
+            example:
+              name: "Jane Smith"
+              email: "jane@example.com"
+              subject: "Cannot export data to CSV"
+              category: "technical"
+              priority: "medium"
+              message: "I need to export my account data to CSV but the export button is greyed out."
+      responses:
+        '200':
+          description: Ticket submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupportFormResponse'
+              example:
+                ticket_id: "550e8400-e29b-41d4-a716-446655440000"
+                message: "Thank you for contacting us! Our AI assistant will respond shortly."
+                estimated_response_time: "Usually within 5 minutes"
+        '422':
+          description: Validation error — one or more fields failed validation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /support/ticket/{ticket_id}:
+    get:
+      summary: Get ticket status and conversation
+      description: >
+        Returns the current status of a support ticket and the full message
+        thread. Used by the web form success page to show customers the agent's
+        response without requiring authentication.
+      operationId: getTicketStatus
+      parameters:
+        - name: ticket_id
+          in: path
+          required: true
+          description: UUID of the ticket returned by /support/submit
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Ticket found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketStatusResponse'
+        '404':
+          description: Ticket not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+
+    SupportFormSubmission:
+      type: object
+      required:
+        - name
+        - email
+        - subject
+        - category
+        - message
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 255
+          description: Customer's full name
+          example: "Jane Smith"
+        email:
+          type: string
+          format: email
+          description: Customer's email address — used for response delivery
+          example: "jane@example.com"
+        subject:
+          type: string
+          minLength: 5
+          maxLength: 255
+          description: Brief description of the issue
+          example: "Cannot export data to CSV"
+        category:
+          type: string
+          enum: [general, technical, billing, feedback, bug_report]
+          description: Issue category for routing and reporting
+          example: "technical"
+        priority:
+          type: string
+          enum: [low, medium, high]
+          default: medium
+          description: Customer-perceived urgency
+          example: "medium"
+        message:
+          type: string
+          minLength: 10
+          maxLength: 1000
+          description: Detailed description of the issue
+          example: "I need to export my account data to CSV but the export button is greyed out."
+        attachments:
+          type: array
+          items:
+            type: string
+          description: Optional list of attachment URLs or base64-encoded files
+          default: []
+
+    SupportFormResponse:
+      type: object
+      required:
+        - ticket_id
+        - message
+        - estimated_response_time
+      properties:
+        ticket_id:
+          type: string
+          format: uuid
+          description: Unique ticket identifier for status polling
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        message:
+          type: string
+          description: User-facing confirmation message
+          example: "Thank you for contacting us! Our AI assistant will respond shortly."
+        estimated_response_time:
+          type: string
+          description: Human-readable estimated response time
+          example: "Usually within 5 minutes"
+
+    TicketStatusResponse:
+      type: object
+      properties:
+        ticket_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [open, in_progress, escalated, resolved, closed]
+          example: resolved
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageSummary'
+        created_at:
+          type: string
+          format: date-time
+        last_updated:
+          type: string
+          format: date-time
+
+    MessageSummary:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [customer, agent, system]
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        channel:
+          type: string
+          enum: [email, whatsapp, web_form]
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            properties:
+              loc:
+                type: array
+                items:
+                  type: string
+              msg:
+                type: string
+              type:
+                type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          example: "Ticket not found"

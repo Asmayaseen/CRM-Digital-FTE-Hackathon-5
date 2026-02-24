@@ -1,0 +1,214 @@
+openapi: "3.1.0"
+info:
+  title: Customer Success FTE — Webhook API
+  description: >
+    Webhook endpoints for Gmail and Twilio WhatsApp channel intake.
+    All webhook requests are validated via channel-specific signature verification.
+  version: "1.0.0"
+
+servers:
+  - url: https://support-api.yourdomain.com
+    description: Production
+  - url: http://localhost:8000
+    description: Local development
+
+paths:
+
+  /webhooks/gmail:
+    post:
+      summary: Gmail Pub/Sub push notification handler
+      description: >
+        Receives push notifications from Google Cloud Pub/Sub when new emails
+        arrive in the configured Gmail inbox. Validates the Pub/Sub message
+        envelope, fetches new emails via Gmail API, and publishes each to the
+        unified intake Kafka topic.
+      operationId: handleGmailWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PubSubPushMessage'
+      responses:
+        '200':
+          description: Notification processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookProcessedResponse'
+        '400':
+          description: Invalid Pub/Sub message format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal processing error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /webhooks/whatsapp:
+    post:
+      summary: Twilio WhatsApp inbound message handler
+      description: >
+        Receives inbound WhatsApp messages from Twilio. Validates the
+        X-Twilio-Signature header to ensure authenticity. Parses the
+        form-encoded Twilio payload and publishes to the unified intake Kafka
+        topic. Returns empty TwiML to prevent immediate auto-reply.
+      operationId: handleWhatsAppWebhook
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TwilioInboundMessage'
+      responses:
+        '200':
+          description: >
+            Empty TwiML response — agent will reply asynchronously.
+          content:
+            application/xml:
+              example: |
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Response></Response>
+        '403':
+          description: Invalid Twilio signature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal processing error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /webhooks/whatsapp/status:
+    post:
+      summary: Twilio delivery status callback
+      description: >
+        Receives delivery status updates for outbound WhatsApp messages.
+        Updates the `delivery_status` field in the `messages` table.
+        Always returns 200 to prevent Twilio retry storms.
+      operationId: handleWhatsAppStatus
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TwilioStatusCallback'
+      responses:
+        '200':
+          description: Status received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: received
+
+components:
+  schemas:
+
+    PubSubPushMessage:
+      type: object
+      required:
+        - message
+        - subscription
+      properties:
+        message:
+          type: object
+          required:
+            - data
+            - messageId
+          properties:
+            data:
+              type: string
+              description: Base64-encoded JSON with historyId and emailAddress
+              example: eyJoaXN0b3J5SWQiOiAiMTIzNDU2IiwgImVtYWlsQWRkcmVzcyI6ICJ1c2VyQGV4YW1wbGUuY29tIn0=
+            messageId:
+              type: string
+              example: "1234567890"
+            publishTime:
+              type: string
+              format: date-time
+        subscription:
+          type: string
+          example: projects/my-project/subscriptions/gmail-sub
+
+    TwilioInboundMessage:
+      type: object
+      required:
+        - MessageSid
+        - From
+        - Body
+      properties:
+        MessageSid:
+          type: string
+          description: Unique message SID
+          example: SM1234567890abcdef
+        From:
+          type: string
+          description: Sender in whatsapp:+E164 format
+          example: "whatsapp:+12025551234"
+        To:
+          type: string
+          description: Receiving number in whatsapp:+E164 format
+          example: "whatsapp:+14155238886"
+        Body:
+          type: string
+          description: Message text content
+          example: "How do I reset my password?"
+        NumMedia:
+          type: string
+          example: "0"
+        ProfileName:
+          type: string
+          description: WhatsApp display name
+          example: "John Doe"
+        WaId:
+          type: string
+          description: WhatsApp ID (without prefix)
+          example: "12025551234"
+        SmsStatus:
+          type: string
+          example: received
+
+    TwilioStatusCallback:
+      type: object
+      required:
+        - MessageSid
+        - MessageStatus
+      properties:
+        MessageSid:
+          type: string
+          example: SM1234567890abcdef
+        MessageStatus:
+          type: string
+          enum: [queued, sending, sent, delivered, undelivered, failed, read]
+          example: delivered
+
+    WebhookProcessedResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: processed
+        count:
+          type: integer
+          description: Number of messages published to Kafka
+          example: 1
+
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          example: Invalid signature

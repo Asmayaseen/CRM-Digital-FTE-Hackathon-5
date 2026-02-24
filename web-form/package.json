@@ -1,0 +1,21 @@
+{
+  "name": "cloudsync-support-form",
+  "version": "1.0.0",
+  "description": "Standalone embeddable support form for CloudSync Pro",
+  "main": "SupportForm.jsx",
+  "scripts": {
+    "test": "jest --watchAll=false",
+    "build": "webpack --mode production"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.1.0",
+    "@testing-library/react": "^14.0.0",
+    "@testing-library/user-event": "^14.4.3",
+    "jest": "^29.6.0",
+    "jest-environment-jsdom": "^29.6.0"
+  }
+}
