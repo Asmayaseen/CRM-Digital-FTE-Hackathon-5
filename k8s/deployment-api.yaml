@@ -19,7 +19,8 @@ spec:
     spec:
       containers:
         - name: fte-api
-          image: your-registry/customer-success-fte:latest
+          image: customer-success-fte:latest
+          imagePullPolicy: Never
           command: ["uvicorn", "production.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
           ports:
             - containerPort: 8000

@@ -1,0 +1,55 @@
+services:
+  # Backend API
+  - type: web
+    name: cloudsync-fte-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    startCommand: uvicorn production.api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONPATH
+        value: "/app"
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: AGENT_MODEL
+        value: meta-llama/llama-4-scout-17b-16e-instruct
+      - key: AGENT_BASE_URL
+        value: https://api.groq.com/openai/v1
+      # Set these as secrets in Render dashboard:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: POSTGRES_HOST
+        sync: false
+      - key: POSTGRES_PORT
+        value: "5432"
+      - key: POSTGRES_DB
+        value: fte_db
+      - key: POSTGRES_USER
+        sync: false
+      - key: POSTGRES_PASSWORD
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_NUMBER
+        sync: false
+      - key: GMAIL_CREDENTIALS_PATH
+        value: /app/credentials/gmail-credentials.json
+
+  # Frontend (Next.js)
+  - type: web
+    name: cloudsync-fte-frontend
+    runtime: node
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        sync: false

@@ -19,7 +19,8 @@ spec:
     spec:
       containers:
         - name: fte-worker
-          image: your-registry/customer-success-fte:latest
+          image: customer-success-fte:latest
+          imagePullPolicy: Never
           command: ["python", "-m", "production.workers.message_processor"]
           envFrom:
             - configMapRef:
