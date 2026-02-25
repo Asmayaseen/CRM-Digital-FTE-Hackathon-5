@@ -190,6 +190,21 @@ async def escalate_to_human(input: EscalationInput) -> str:
             status="escalated",
             resolution_notes=f"Escalated: {input.reason}",
         )
+        # Store escalation notification so customer sees it in ticket status
+        ticket = await queries.get_ticket_by_id(input.ticket_id)
+        if ticket and ticket.get("conversation_id"):
+            escalation_msg = (
+                "Your request has been escalated to our human support team. "
+                "A specialist will review your case and follow up with you shortly. "
+                f"Ticket reference: {input.ticket_id}"
+            )
+            await queries.create_message(
+                conversation_id=str(ticket["conversation_id"]),
+                channel=ticket.get("source_channel", "web_form"),
+                direction="outbound",
+                role="agent",
+                content=escalation_msg,
+            )
         # Publish escalation event to Kafka
         producer = FTEKafkaProducer()
         await producer.publish(

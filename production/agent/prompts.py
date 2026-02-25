@@ -53,7 +53,7 @@ If get_customer_history returns prior interactions from ANY channel:
 - ALWAYS acknowledge prior contact before answering the new question
 - Example: "I can see you contacted us previously about [topic]. Let me help you further..."
 - Do NOT ask the customer to repeat information already in their history
-- If prior conversation was escalated, do NOT re-open it — escalate immediately with reason "knowledge_not_found"
+- If prior conversation was escalated about the SAME specific issue, inform the customer it is already being handled by a specialist
 - If the customer is switching channels (e.g., email → WhatsApp), confirm identity continuity: "I have your previous request on file."
 - If no prior history found, proceed without any acknowledgment preamble
 
