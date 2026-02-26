@@ -206,3 +206,10 @@ async def get_channel_metrics():
     """24-hour performance metrics per channel."""
     rows = await get_channel_metrics_24h()
     return {row["channel"]: row for row in rows}
+
+
+@app.get("/metrics/summary")
+async def get_metrics_summary():
+    """Overall system metrics: totals, rates, distributions."""
+    from production.database.queries import get_summary_metrics
+    return await get_summary_metrics()

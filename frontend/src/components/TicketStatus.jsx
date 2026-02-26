@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { getTicketStatus } from '@/lib/apiClient';
+import { getTicketStatus, replyToTicket } from '@/lib/apiClient';
 
 const STATUS_CONFIG = {
   open:        { label: 'Open',        bg: 'bg-blue-100 dark:bg-blue-900/40',     text: 'text-blue-700 dark:text-blue-300',     dot: 'bg-blue-500' },
@@ -48,18 +48,43 @@ export default function TicketStatus() {
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [replyText, setReplyText] = useState('');
+  const [replyLoading, setReplyLoading] = useState(false);
+  const [replySent, setReplySent] = useState(false);
 
   async function handleLookup(e) {
     e.preventDefault();
     const id = ticketId.trim();
     if (!id) { setError('Please enter a ticket ID'); return; }
-    setLoading(true); setError(''); setTicket(null);
+    setLoading(true); setError(''); setTicket(null); setReplySent(false); setReplyText('');
     try {
       setTicket(await getTicketStatus(id));
     } catch (err) {
       setError(err.message || 'Failed to fetch ticket. Please check the ID and try again.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleReply(e) {
+    e.preventDefault();
+    const text = replyText.trim();
+    if (!text) return;
+    setReplyLoading(true);
+    try {
+      await replyToTicket(ticket.ticket_id, text, ticket.customer_name || 'Customer');
+      setReplyText('');
+      setReplySent(true);
+      setTimeout(async () => {
+        try {
+          setTicket(await getTicketStatus(ticket.ticket_id));
+        } catch (_) {}
+        setReplySent(false);
+      }, 15000);
+    } catch (err) {
+      setError(err.message || 'Failed to send reply. Please try again.');
+    } finally {
+      setReplyLoading(false);
     }
   }
 
@@ -127,6 +152,41 @@ export default function TicketStatus() {
             </div>
           )}
 
+          {(ticket.status === 'open' || ticket.status === 'in_progress') && (
+            <div className="space-y-3">
+              {replySent && (
+                <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 px-4 py-3 text-sm text-blue-700 dark:text-blue-300">
+                  Reply sent — refreshing in 15 s…
+                </div>
+              )}
+              <form onSubmit={handleReply} className="space-y-2">
+                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Send a Follow-up</p>
+                <textarea
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                  placeholder="Type your follow-up message…"
+                  rows={3}
+                  disabled={replyLoading || replySent}
+                  className="w-full rounded-xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={replyLoading || replySent || replyText.trim().length < 2}
+                    className="btn-primary px-5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {replyLoading ? (
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    ) : 'Send Reply'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
           {ticket.resolution_notes && (
             <div className="rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/40 px-4 py-3">
               <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">Resolution Note</p>
@@ -134,7 +194,7 @@ export default function TicketStatus() {
             </div>
           )}
 
-          <button onClick={() => { setTicket(null); setTicketId(''); }}
+          <button onClick={() => { setTicket(null); setTicketId(''); setReplyText(''); setReplySent(false); setError(''); }}
             className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors">
             ← Search another ticket
           </button>

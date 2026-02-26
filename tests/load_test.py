@@ -12,6 +12,19 @@ Run (100 users, 10 spawn rate, 2 min):
 Or run with web UI:
     locust -f tests/load_test.py --host http://localhost:8000
     # Open http://localhost:8089
+
+Endpoints covered:
+    SupportAPIUser:
+        GET  /health
+        POST /support/submit
+        GET  /support/ticket/[id]
+        GET  /support/ticket/[not-found]
+        POST /support/ticket/[id]/reply
+
+    AdminAPIUser:
+        GET  /health
+        GET  /metrics/channels
+        GET  /metrics/summary
 """
 import random
 import uuid
@@ -126,6 +139,27 @@ class SupportAPIUser(HttpUser):
             else:
                 resp.failure(f"Expected 404, got {resp.status_code}")
 
+    @task(3)
+    def send_reply(self):
+        """Send a follow-up reply on an existing ticket."""
+        if not _submitted_tickets:
+            return
+        ticket_id = random.choice(_submitted_tickets)
+        payload = {
+            "message": random.choice(SAMPLE_MESSAGES),
+            "customer_name": random.choice(SAMPLE_NAMES),
+        }
+        with self.client.post(
+            f"/support/ticket/{ticket_id}/reply",
+            json=payload,
+            catch_response=True,
+            name="/support/ticket/[id]/reply",
+        ) as resp:
+            if resp.status_code in (200, 404):
+                resp.success()
+            else:
+                resp.failure(f"Reply failed: {resp.status_code}")
+
 
 class AdminAPIUser(HttpUser):
     """Simulates monitoring / ops checks."""
@@ -138,3 +172,29 @@ class AdminAPIUser(HttpUser):
         with self.client.get("/health", name="/health [admin]") as resp:
             if resp.status_code != 200:
                 resp.failure("Health degraded")
+
+    @task(2)
+    def check_channel_metrics(self):
+        """Poll per-channel 24-hour performance metrics."""
+        with self.client.get(
+            "/metrics/channels",
+            catch_response=True,
+            name="/metrics/channels",
+        ) as resp:
+            if resp.status_code == 200:
+                resp.success()
+            else:
+                resp.failure(f"Channel metrics failed: {resp.status_code}")
+
+    @task(1)
+    def check_summary_metrics(self):
+        """Poll overall system metrics (totals, rates, distributions)."""
+        with self.client.get(
+            "/metrics/summary",
+            catch_response=True,
+            name="/metrics/summary",
+        ) as resp:
+            if resp.status_code == 200:
+                resp.success()
+            else:
+                resp.failure(f"Summary metrics failed: {resp.status_code}")

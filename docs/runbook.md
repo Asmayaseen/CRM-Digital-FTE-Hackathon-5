@@ -1,20 +1,153 @@
 # Runbook — CloudSync Pro Customer Success FTE
 
-**Version**: 1.0
-**Last Updated**: 2026-02-24
+**Version**: 1.1
+**Last Updated**: 2026-02-25
 **On-call contact**: engineering@cloudsyncpro.com
 
 ---
 
 ## Table of Contents
-1. [Service Overview](#service-overview)
-2. [Health Checks](#health-checks)
-3. [Common Incidents](#common-incidents)
-4. [Escalation Procedures](#escalation-procedures)
-5. [Deployment & Rollback](#deployment--rollback)
-6. [Database Operations](#database-operations)
-7. [Channel-Specific Troubleshooting](#channel-specific-troubleshooting)
-8. [Monitoring & Alerts](#monitoring--alerts)
+1. [Demo Quick Start (Multi-Terminal)](#demo-quick-start-multi-terminal)
+2. [Service Overview](#service-overview)
+3. [Health Checks](#health-checks)
+4. [Common Incidents](#common-incidents)
+5. [Escalation Procedures](#escalation-procedures)
+6. [Deployment & Rollback](#deployment--rollback)
+7. [Database Operations](#database-operations)
+8. [Channel-Specific Troubleshooting](#channel-specific-troubleshooting)
+9. [Monitoring & Alerts](#monitoring--alerts)
+
+---
+
+## Demo Quick Start (Multi-Terminal)
+
+> Complete system startup for a live demo. Open **4 terminals** side-by-side.
+> Total startup time: ~30 seconds (excluding DB init).
+
+### Prerequisites checklist
+- [ ] PostgreSQL running with `fte_db` + pgvector extension
+- [ ] `.env` file present (copy from `.env.example` and fill keys)
+- [ ] Python deps installed: `pip install -r requirements.txt`
+- [ ] Node deps installed: `cd frontend && npm install`
+- [ ] Knowledge base seeded: `python -m production.database.seed_knowledge_base` *(first time only)*
+
+---
+
+### Terminal 1 — Backend API
+
+```bash
+cd "/mnt/d/The CRM Digital FTE Factory Final Hackathon 5"
+python -m uvicorn production.api.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**Expected output:**
+```
+WARNING:production.kafka_client:Kafka unavailable — running without message queue
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000
+```
+
+> Kafka timeout (5 s) is normal in dev — system auto-bypasses it.
+
+**Verify:** `curl http://localhost:8000/health`
+
+---
+
+### Terminal 2 — Frontend (Next.js)
+
+```bash
+cd "/mnt/d/The CRM Digital FTE Factory Final Hackathon 5/frontend"
+npm run dev
+```
+
+**Expected output:**
+```
+▲ Next.js 14.x
+- Local: http://localhost:3000
+✓ Ready in 2.1s
+```
+
+**Verify:** Open `http://localhost:3000` in browser
+
+---
+
+### Terminal 3 — API Logs (live tail)
+
+```bash
+# Watch all agent activity in real time
+python -m uvicorn production.api.main:app --host 0.0.0.0 --port 8000 2>&1 | tee /tmp/fte.log
+# or if already running in Terminal 1:
+tail -f /tmp/fte.log
+```
+
+> Shows tool calls, ticket creation, agent reasoning, and escalation events.
+
+---
+
+### Terminal 4 — Load Test (optional, demo only)
+
+```bash
+cd "/mnt/d/The CRM Digital FTE Factory Final Hackathon 5"
+# Headless — 50 users, 5/s spawn, 1 minute
+locust -f tests/load_test.py --host http://localhost:8000 \
+       --users 50 --spawn-rate 5 --run-time 1m --headless
+
+# Or with web UI at http://localhost:8089
+locust -f tests/load_test.py --host http://localhost:8000
+```
+
+---
+
+### End-to-End Demo Flow
+
+After all terminals are running:
+
+```bash
+# 1. Submit a support ticket (web form channel)
+curl -s -X POST http://localhost:8000/support/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Demo User",
+    "email": "demo@example.com",
+    "subject": "Cannot login to my account",
+    "message": "I have been locked out since yesterday. Password reset emails are not arriving.",
+    "category": "account",
+    "priority": "high"
+  }' | python3 -m json.tool
+
+# 2. Copy ticket_id from response, then check status:
+curl -s http://localhost:8000/support/ticket/<TICKET_ID> | python3 -m json.tool
+
+# 3. Send a follow-up reply:
+curl -s -X POST http://localhost:8000/support/ticket/<TICKET_ID>/reply \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Still having the issue, please help!", "customer_name": "Demo User"}' \
+  | python3 -m json.tool
+
+# 4. View live metrics:
+curl -s http://localhost:8000/metrics/summary | python3 -m json.tool
+
+# 5. Open dashboard in browser:
+#    http://localhost:3000/dashboard
+```
+
+---
+
+### Shutdown (clean)
+
+```bash
+# Stop API (Terminal 1)
+Ctrl+C
+
+# Stop frontend (Terminal 2)
+Ctrl+C
+
+# Kill any background uvicorn processes
+pkill -f uvicorn
+
+# Optional: stop PostgreSQL
+sudo service postgresql stop
+```
 
 ---
 

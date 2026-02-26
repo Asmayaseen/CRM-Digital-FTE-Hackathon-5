@@ -32,6 +32,7 @@ export default function RootLayout({ children }) {
                 <Link href="/#features" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Features</Link>
                 <Link href="/#how-it-works" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">How it works</Link>
                 <Link href="/#channels" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Channels</Link>
+                <Link href="/dashboard" className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Dashboard</Link>
               </nav>
 
               {/* Right side */}

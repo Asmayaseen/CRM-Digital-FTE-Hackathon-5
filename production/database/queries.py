@@ -378,3 +378,74 @@ async def get_channel_metrics_24h() -> list[dict]:
             )
             m["avg_latency_ms"] = float(lat_row["avg_latency_ms"]) if lat_row["avg_latency_ms"] else None
         return metrics
+
+
+async def get_summary_metrics() -> dict:
+    """Aggregate system-wide metrics: totals, rates, and distributions."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        # Scalar counts
+        tickets_24h = await conn.fetchval(
+            "SELECT COUNT(*) FROM tickets WHERE created_at > NOW() - INTERVAL '24 hours'"
+        )
+        tickets_total = await conn.fetchval("SELECT COUNT(*) FROM tickets")
+        customers_total = await conn.fetchval("SELECT COUNT(*) FROM customers")
+        messages_24h = await conn.fetchval(
+            "SELECT COUNT(*) FROM messages WHERE created_at > NOW() - INTERVAL '24 hours'"
+        )
+        conversations_24h = await conn.fetchval(
+            "SELECT COUNT(*) FROM conversations WHERE started_at > NOW() - INTERVAL '24 hours'"
+        )
+        escalations_24h = await conn.fetchval(
+            "SELECT COUNT(*) FROM conversations WHERE status = 'escalated' AND started_at > NOW() - INTERVAL '24 hours'"
+        )
+
+        # Escalation rate (%)
+        escalation_rate = (
+            round(float(escalations_24h) / float(conversations_24h) * 100, 1)
+            if conversations_24h
+            else 0.0
+        )
+
+        # Average latency from agent_metrics
+        lat_row = await conn.fetchrow(
+            """SELECT AVG(metric_value) AS avg_latency_ms
+               FROM agent_metrics
+               WHERE metric_name = 'latency_ms'
+                 AND recorded_at > NOW() - INTERVAL '24 hours'"""
+        )
+        avg_latency_ms = (
+            round(float(lat_row["avg_latency_ms"]), 1) if lat_row["avg_latency_ms"] else None
+        )
+
+        # Ticket status distribution
+        status_rows = await conn.fetch(
+            "SELECT status, COUNT(*) AS cnt FROM tickets GROUP BY status"
+        )
+        ticket_status = {r["status"]: int(r["cnt"]) for r in status_rows}
+        for s in ("open", "in_progress", "resolved", "closed", "escalated"):
+            ticket_status.setdefault(s, 0)
+
+        # Ticket count by channel (from conversations)
+        channel_rows = await conn.fetch(
+            """SELECT initial_channel AS channel, COUNT(*) AS cnt
+               FROM conversations
+               WHERE started_at > NOW() - INTERVAL '24 hours'
+               GROUP BY initial_channel"""
+        )
+        ticket_by_channel = {r["channel"]: int(r["cnt"]) for r in channel_rows}
+        for ch in ("gmail", "whatsapp", "web_form"):
+            ticket_by_channel.setdefault(ch, 0)
+
+    return {
+        "tickets_24h": int(tickets_24h),
+        "tickets_total": int(tickets_total),
+        "customers_total": int(customers_total),
+        "messages_24h": int(messages_24h),
+        "conversations_24h": int(conversations_24h),
+        "escalations_24h": int(escalations_24h),
+        "escalation_rate_pct": escalation_rate,
+        "avg_latency_ms": avg_latency_ms,
+        "ticket_status": ticket_status,
+        "ticket_by_channel": ticket_by_channel,
+    }

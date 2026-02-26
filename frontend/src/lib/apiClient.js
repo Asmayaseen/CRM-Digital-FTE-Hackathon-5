@@ -33,10 +33,50 @@ export async function getTicketStatus(ticketId) {
 }
 
 /**
+ * Send a follow-up reply on an existing ticket
+ * @param {string} ticketId
+ * @param {string} message
+ * @param {string} customerName
+ * @returns {Promise<{status: string, ticket_id: string}>}
+ */
+export async function replyToTicket(ticketId, message, customerName) {
+  const res = await fetch(`${API_BASE}/support/ticket/${ticketId}/reply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, customer_name: customerName }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Request failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
  * Get system health
  * @returns {Promise<Object>}
  */
 export async function getHealth() {
   const res = await fetch(`${API_BASE}/health`);
+  return res.json();
+}
+
+/**
+ * Get 24-hour performance metrics per channel
+ * @returns {Promise<Object>}
+ */
+export async function getChannelMetrics() {
+  const res = await fetch(`${API_BASE}/metrics/channels`);
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Get overall system metrics: totals, rates, distributions
+ * @returns {Promise<Object>}
+ */
+export async function getSummaryMetrics() {
+  const res = await fetch(`${API_BASE}/metrics/summary`);
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   return res.json();
 }

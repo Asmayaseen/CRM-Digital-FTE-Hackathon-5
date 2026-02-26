@@ -79,6 +79,18 @@ class SupportFormResponse(BaseModel):
     estimated_response_time: str
 
 
+class ReplyRequest(BaseModel):
+    message: str
+    customer_name: str = "Customer"
+
+    @field_validator("message")
+    @classmethod
+    def message_must_have_content(cls, v: str) -> str:
+        if not v or len(v.strip()) < 2:
+            raise ValueError("Message must be at least 2 characters")
+        return v.strip()
+
+
 # These are set by api/main.py after startup
 _kafka_producer = None
 _create_ticket_record = None
@@ -143,15 +155,16 @@ async def get_ticket_status(ticket_id: str):
     if not ticket:
         # Fallback: look up by channel_message_id (form submission ID stored in messages)
         try:
-            from uuid import UUID as _UUID
             pool = await get_db_pool()
             async with pool.acquire() as conn:
                 row = await conn.fetchrow(
-                    """SELECT t.* FROM tickets t
-                       JOIN conversations c ON c.id = t.conversation_id
+                    """SELECT t.*, cust.email as customer_email, cust.name as customer_name
+                       FROM tickets t
+                       JOIN conversations conv ON conv.id = t.conversation_id
+                       JOIN customers cust ON cust.id = t.customer_id
                        WHERE EXISTS (
                            SELECT 1 FROM messages m
-                           WHERE m.conversation_id = c.id
+                           WHERE m.conversation_id = conv.id
                            AND m.channel_message_id = $1
                        )
                        ORDER BY t.created_at DESC LIMIT 1""",
@@ -171,7 +184,76 @@ async def get_ticket_status(ticket_id: str):
     return {
         "ticket_id": ticket_id,
         "status": ticket["status"],
+        "customer_name": ticket.get("customer_name"),
         "messages": messages,
         "created_at": ticket["created_at"].isoformat() if ticket.get("created_at") else None,
         "last_updated": ticket["resolved_at"].isoformat() if ticket.get("resolved_at") else None,
     }
+
+
+@router.post("/ticket/{ticket_id}/reply")
+async def reply_to_ticket(ticket_id: str, body: ReplyRequest, background_tasks: BackgroundTasks):
+    """Accept a follow-up message on an existing ticket and queue it for agent processing."""
+    from production.database.queries import get_ticket_by_id, get_db_pool
+
+    ticket = None
+    try:
+        ticket = await get_ticket_by_id(ticket_id)
+    except Exception:
+        pass
+
+    if not ticket:
+        # Fallback: look up by channel_message_id (form submission UUID stored in messages)
+        try:
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """SELECT t.*, cust.email as customer_email, cust.name as customer_name
+                       FROM tickets t
+                       JOIN conversations conv ON conv.id = t.conversation_id
+                       JOIN customers cust ON cust.id = t.customer_id
+                       WHERE EXISTS (
+                           SELECT 1 FROM messages m
+                           WHERE m.conversation_id = conv.id
+                           AND m.channel_message_id = $1
+                       )
+                       ORDER BY t.created_at DESC LIMIT 1""",
+                    ticket_id
+                )
+                if row:
+                    ticket = dict(row)
+        except Exception:
+            pass
+
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    if ticket.get("status") in ("closed", "resolved"):
+        raise HTTPException(status_code=422, detail="Cannot reply to a closed or resolved ticket")
+
+    customer_email = ticket.get("customer_email", "")
+    customer_name = body.customer_name if body.customer_name != "Customer" else (ticket.get("customer_name") or "Customer")
+
+    message_data = {
+        "channel": "web_form",
+        "channel_message_id": ticket_id,  # same as original → keeps same conversation thread
+        "customer_email": customer_email,
+        "customer_name": customer_name,
+        "subject": f"Re: {ticket.get('subject', 'Support Request')}",
+        "content": body.message,
+        "category": ticket.get("category", "general"),
+        "priority": ticket.get("priority", "medium"),
+        "received_at": datetime.now(timezone.utc).isoformat(),
+        "metadata": {
+            "form_version": "1.0",
+            "attachments": [],
+            "is_reply": True,
+        },
+    }
+
+    if _message_processor:
+        background_tasks.add_task(_message_processor, message_data)
+    else:
+        logger.warning("No message processor available — reply for ticket %s not processed", ticket_id)
+
+    return {"status": "received", "ticket_id": ticket_id}
