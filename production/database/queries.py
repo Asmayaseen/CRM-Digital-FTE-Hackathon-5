@@ -384,7 +384,7 @@ async def get_channel_metrics_24h() -> list[dict]:
 
 async def get_summary_metrics() -> dict:
     """Aggregate system-wide metrics: totals, rates, and distributions."""
-    pool = await get_pool()
+    pool = await get_db_pool()
     async with pool.acquire() as conn:
         # Scalar counts
         tickets_24h = await conn.fetchval(
