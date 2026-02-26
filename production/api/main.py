@@ -119,9 +119,10 @@ async def gmail_webhook(request: Request, background_tasks: BackgroundTasks):
         body = await request.json()
         messages = await gmail_handler.process_notification(body)
         for message in messages:
-            background_tasks.add_task(
-                kafka_producer.publish, TOPICS["tickets_incoming"], message
-            )
+            logger.info("Gmail message received from %s: %s",
+                        message.get("customer_email"), message.get("subject", "")[:50])
+            # Process directly — guarantees AI responds even when Kafka is unavailable
+            background_tasks.add_task(_process_message_direct, message)
         return {"status": "processed", "count": len(messages)}
     except Exception as exc:
         logger.error("Gmail webhook error: %s", exc)
