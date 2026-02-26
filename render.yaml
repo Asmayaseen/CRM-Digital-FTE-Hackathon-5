@@ -26,6 +26,8 @@ services:
         sync: false
       - key: POSTGRES_PORT
         value: "5432"
+      - key: POSTGRES_SSL
+        value: "require"
       - key: POSTGRES_DB
         value: fte_db
       - key: POSTGRES_USER
