@@ -129,10 +129,8 @@ async def submit_support_form(submission: SupportFormSubmission, background_task
     }
 
     try:
-        from production.kafka_client import TOPICS
-        if _kafka_producer and _kafka_producer._producer:
-            await _kafka_producer.publish(TOPICS["tickets_incoming"], message_data)
-        elif _message_processor:
+        if _message_processor:
+            # Always process directly — guarantees ticket is created and AI responds
             background_tasks.add_task(_message_processor, message_data)
         else:
             logger.warning("No message processor available — ticket %s not processed", ticket_id)
@@ -252,8 +250,9 @@ async def reply_to_ticket(ticket_id: str, body: ReplyRequest, background_tasks: 
     }
 
     if _message_processor:
+        # Always process directly — guarantees AI responds to follow-up
         background_tasks.add_task(_message_processor, message_data)
     else:
-        logger.warning("No message processor available — reply for ticket %s not processed", ticket_id)
+        logger.warning("No message processor — reply for ticket %s not processed", ticket_id)
 
     return {"status": "received", "ticket_id": ticket_id}
