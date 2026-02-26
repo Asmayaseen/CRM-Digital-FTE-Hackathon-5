@@ -79,7 +79,7 @@ export default function SupportForm({ onSuccess }) {
     <form onSubmit={handleSubmit} noValidate className="space-y-5">
       {/* Name */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Full Name <span className="text-red-500">*</span>
         </label>
         <input
@@ -95,7 +95,7 @@ export default function SupportForm({ onSuccess }) {
 
       {/* Email */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Email Address <span className="text-red-500">*</span>
         </label>
         <input
@@ -112,7 +112,7 @@ export default function SupportForm({ onSuccess }) {
       {/* Category + Priority */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
           <select
             name="category"
             value={form.category}
@@ -125,7 +125,7 @@ export default function SupportForm({ onSuccess }) {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priority</label>
           <select
             name="priority"
             value={form.priority}
@@ -141,7 +141,7 @@ export default function SupportForm({ onSuccess }) {
 
       {/* Subject */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Subject <span className="text-red-500">*</span>
         </label>
         <input
@@ -157,7 +157,7 @@ export default function SupportForm({ onSuccess }) {
 
       {/* Message */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Message <span className="text-red-500">*</span>
         </label>
         <textarea
@@ -165,6 +165,7 @@ export default function SupportForm({ onSuccess }) {
           value={form.message}
           onChange={handleChange}
           rows={5}
+          maxLength={1000}
           placeholder="Please describe your issue in detail..."
           className={`input-field resize-none ${errors.message ? 'border-red-400 focus:ring-red-400' : ''}`}
         />
@@ -172,7 +173,13 @@ export default function SupportForm({ onSuccess }) {
           {errors.message
             ? <p className="text-xs text-red-500">{errors.message}</p>
             : <span />}
-          <span className="text-xs text-gray-400">{form.message.length} chars</span>
+          <span className={`text-xs font-medium ${
+            form.message.length > 900 ? 'text-red-500' :
+            form.message.length > 700 ? 'text-yellow-500' :
+            'text-gray-400 dark:text-gray-500'
+          }`}>
+            {form.message.length} / 1000
+          </span>
         </div>
       </div>
 

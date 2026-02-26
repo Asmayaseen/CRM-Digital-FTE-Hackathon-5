@@ -8,6 +8,7 @@ const STATUS_CONFIG = {
   in_progress: { label: 'In Progress', bg: 'bg-yellow-100 dark:bg-yellow-900/40', text: 'text-yellow-700 dark:text-yellow-300', dot: 'bg-yellow-500' },
   resolved:    { label: 'Resolved',    bg: 'bg-green-100 dark:bg-green-900/40',   text: 'text-green-700 dark:text-green-300',   dot: 'bg-green-500' },
   closed:      { label: 'Closed',      bg: 'bg-gray-100 dark:bg-slate-700',       text: 'text-gray-600 dark:text-gray-400',     dot: 'bg-gray-400' },
+  escalated:   { label: 'Escalated',   bg: 'bg-red-100 dark:bg-red-900/40',       text: 'text-red-700 dark:text-red-300',       dot: 'bg-red-500' },
 };
 
 function StatusBadge({ status }) {
@@ -152,7 +153,7 @@ export default function TicketStatus() {
             </div>
           )}
 
-          {(ticket.status === 'open' || ticket.status === 'in_progress') && (
+          {(ticket.status === 'open' || ticket.status === 'in_progress' || ticket.status === 'escalated') && (
             <div className="space-y-3">
               {replySent && (
                 <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 px-4 py-3 text-sm text-blue-700 dark:text-blue-300">

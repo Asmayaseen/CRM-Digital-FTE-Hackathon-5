@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import LiveStats from '@/components/LiveStats';
 
 const FEATURES = [
   {
@@ -149,12 +150,6 @@ const CHANNELS = [
   },
 ];
 
-const STATS = [
-  { value: '< 5s',  label: 'Avg. Response Time' },
-  { value: '24/7',  label: 'Availability' },
-  { value: '3',     label: 'Support Channels' },
-  { value: '99.9%', label: 'Uptime SLA' },
-];
 
 export default function LandingPage() {
   return (
@@ -203,15 +198,8 @@ export default function LandingPage() {
           </Link>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto animate-fade-up">
-          {STATS.map(s => (
-            <div key={s.label} className="glass-card px-4 py-5 text-center glow-blue">
-              <p className="text-3xl font-extrabold gradient-text mb-1">{s.value}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{s.label}</p>
-            </div>
-          ))}
-        </div>
+        {/* Stats — live from API */}
+        <LiveStats />
       </section>
 
       {/* ── FEATURES ── */}
