@@ -18,19 +18,31 @@ _pool: Optional[asyncpg.Pool] = None
 async def get_db_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
-        ssl_mode = os.getenv("POSTGRES_SSL", "disable")
-        _pool = await asyncpg.create_pool(
-            host=os.getenv("POSTGRES_HOST", "localhost"),
-            port=int(os.getenv("POSTGRES_PORT", "5432")),
-            database=os.getenv("POSTGRES_DB", "fte_db"),
-            user=os.getenv("POSTGRES_USER", "fte_user"),
-            password=os.getenv("POSTGRES_PASSWORD", "changeme"),
-            ssl=ssl_mode if ssl_mode != "disable" else None,
-            min_size=2,
-            max_size=10,
-            timeout=5.0,
-            command_timeout=10.0,
-        )
+        database_url = os.getenv("DATABASE_URL")
+        if database_url:
+            # Neon / cloud DB — use full URL with SSL
+            _pool = await asyncpg.create_pool(
+                database_url,
+                ssl="require",
+                min_size=1,
+                max_size=5,
+                timeout=10.0,
+                command_timeout=15.0,
+            )
+        else:
+            ssl_mode = os.getenv("POSTGRES_SSL", "disable")
+            _pool = await asyncpg.create_pool(
+                host=os.getenv("POSTGRES_HOST", "localhost"),
+                port=int(os.getenv("POSTGRES_PORT", "5432")),
+                database=os.getenv("POSTGRES_DB", "fte_db"),
+                user=os.getenv("POSTGRES_USER", "fte_user"),
+                password=os.getenv("POSTGRES_PASSWORD", "changeme"),
+                ssl=ssl_mode if ssl_mode != "disable" else None,
+                min_size=2,
+                max_size=10,
+                timeout=5.0,
+                command_timeout=10.0,
+            )
     return _pool
 
 
