@@ -137,6 +137,16 @@ class UnifiedMessageProcessor:
                 customer_id, channel
             )
 
+            # Step 5b: Deliver agent response via channel
+            await self._deliver_response(
+                conversation_id=conversation_id,
+                channel=channel,
+                customer_email=customer_email,
+                customer_phone=customer_phone,
+                customer_name=customer_name,
+                raw_message=raw_message,
+            )
+
             # Step 6: Publish metrics
             latency_ms = int((time.monotonic() - start_time) * 1000)
             await self._producer.publish(
@@ -202,6 +212,69 @@ class UnifiedMessageProcessor:
 
     # ------------------------------------------------------------------
     # Conversation management
+    # ------------------------------------------------------------------
+    # Channel delivery
+    # ------------------------------------------------------------------
+
+    async def _deliver_response(
+        self,
+        conversation_id: str,
+        channel: str,
+        customer_email: str | None,
+        customer_phone: str | None,
+        customer_name: str,
+        raw_message: dict,
+    ) -> None:
+        """Send the agent's last outbound message via the actual channel (Gmail/Twilio)."""
+        try:
+            # Fetch the most recent agent outbound message for this conversation
+            rows = await queries.get_last_agent_message(conversation_id)
+            if not rows:
+                logger.warning("No agent message found to deliver for conv=%s", conversation_id)
+                return
+
+            message_id = rows["id"]
+            content = rows["content"]
+            subject = raw_message.get("subject", "Re: Support Request")
+            thread_id = raw_message.get("thread_id")
+
+            if channel == "email" and customer_email:
+                from production.channels.gmail_handler import GmailHandler
+                handler = GmailHandler()
+                result = await handler.send_reply(
+                    to_email=customer_email,
+                    subject=subject if subject.startswith("Re:") else f"Re: {subject}",
+                    body=content,
+                    thread_id=thread_id,
+                )
+                delivery_status = result.get("delivery_status", "failed")
+                sent_id = result.get("channel_message_id")
+                await queries.update_message_delivery_status(
+                    channel_message_id=str(message_id),
+                    status=delivery_status,
+                )
+                logger.info(
+                    "Gmail reply sent to %s | status=%s | sent_id=%s",
+                    customer_email, delivery_status, sent_id
+                )
+
+            elif channel == "whatsapp" and customer_phone:
+                from production.channels.whatsapp_handler import WhatsAppHandler
+                handler = WhatsAppHandler()
+                result = await handler.send_message(customer_phone, content)
+                delivery_status = result.get("delivery_status", "failed")
+                await queries.update_message_delivery_status(
+                    channel_message_id=str(message_id),
+                    status=delivery_status,
+                )
+                logger.info(
+                    "WhatsApp reply sent to %s | status=%s",
+                    customer_phone, delivery_status
+                )
+
+        except Exception as exc:
+            logger.error("_deliver_response failed for conv=%s: %s", conversation_id, exc)
+
     # ------------------------------------------------------------------
 
     async def _get_or_create_conversation(

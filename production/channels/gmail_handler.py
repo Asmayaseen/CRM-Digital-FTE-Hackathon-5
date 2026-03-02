@@ -85,22 +85,23 @@ class GmailHandler:
                 .get(userId="me", id=message_id, format="full")
                 .execute()
             )
-            headers = {h["name"]: h["value"] for h in msg["payload"]["headers"]}
+            # Case-insensitive header lookup (Gmail API returns inconsistent casing)
+            headers = {h["name"].lower(): h["value"] for h in msg["payload"]["headers"]}
             body = self._extract_body(msg["payload"])
 
             return {
                 "channel": "email",
                 "channel_message_id": message_id,
-                "customer_email": self._extract_email(headers.get("From", "")),
-                "customer_name": self._extract_name(headers.get("From", "")),
-                "subject": headers.get("Subject", "Support Request"),
+                "customer_email": self._extract_email(headers.get("from", "")),
+                "customer_name": self._extract_name(headers.get("from", "")),
+                "subject": headers.get("subject", "Support Request"),
                 "content": body,
                 "received_at": datetime.now(timezone.utc).isoformat(),
                 "thread_id": msg.get("threadId"),
                 "metadata": {
                     "headers": {
                         k: v for k, v in headers.items()
-                        if k in ("From", "To", "Subject", "Date", "Message-ID")
+                        if k in ("from", "to", "subject", "date", "message-id")
                     },
                     "labels": msg.get("labelIds", []),
                 },

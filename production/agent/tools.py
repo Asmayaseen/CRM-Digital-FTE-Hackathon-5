@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import Literal
+from typing import Literal, Optional
 
 from agents import function_tool
 from pydantic import BaseModel, Field
@@ -45,7 +45,7 @@ class TicketInput(BaseModel):
     issue: str = Field(..., description="Brief description of the customer issue")
     priority: Literal["low", "medium", "high"] = Field(default="medium")
     channel: Channel = Field(..., description="Channel where the inquiry arrived")
-    conversation_id: str = Field(default="", description="Active conversation UUID (optional)")
+    conversation_id: Optional[str] = Field(default=None, description="Active conversation UUID — omit if unknown")
 
 
 class EscalationInput(BaseModel):
@@ -58,7 +58,7 @@ class EscalationInput(BaseModel):
         "explicit_human_request",
         "knowledge_not_found",
     ] = Field(..., description="Reason code for escalation")
-    urgency: Literal["normal", "urgent"] = Field(default="normal")
+    urgency: Literal["normal", "urgent", "high"] = Field(default="normal")
 
 
 class ResponseInput(BaseModel):

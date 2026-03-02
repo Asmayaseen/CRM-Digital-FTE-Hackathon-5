@@ -207,12 +207,42 @@ async def create_message(conversation_id: str,
 
 async def update_message_delivery_status(channel_message_id: str,
                                           status: str) -> None:
+    """Update delivery status — accepts either a channel_message_id string or a UUID (message.id)."""
     pool = await get_db_pool()
     async with pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE messages SET delivery_status = $1 WHERE channel_message_id = $2",
-            status, channel_message_id
+        # Try UUID match (message primary key) first, then channel_message_id string
+        try:
+            parsed_uuid = UUID(channel_message_id)
+            await conn.execute(
+                "UPDATE messages SET delivery_status = $1 WHERE id = $2",
+                status, parsed_uuid
+            )
+        except (ValueError, Exception):
+            await conn.execute(
+                "UPDATE messages SET delivery_status = $1 WHERE channel_message_id = $2",
+                status, channel_message_id
+            )
+
+
+async def get_last_agent_message(conversation_id: str) -> Optional[dict]:
+    """Return the most recent agent outbound message for a conversation."""
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT id, content, delivery_status, channel_message_id
+               FROM messages
+               WHERE conversation_id = $1
+                 AND role = 'agent'
+                 AND direction = 'outbound'
+               ORDER BY created_at DESC
+               LIMIT 1""",
+            UUID(conversation_id)
         )
+        if not row:
+            return None
+        return {"id": row["id"], "content": row["content"],
+                "delivery_status": row["delivery_status"],
+                "channel_message_id": row["channel_message_id"]}
 
 
 async def load_conversation_history(conversation_id: str) -> list[dict]:

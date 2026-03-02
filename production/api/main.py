@@ -129,6 +129,59 @@ async def gmail_webhook(request: Request, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.post("/gmail/poll")
+async def gmail_poll(background_tasks: BackgroundTasks, max_results: int = 5, label: str = "INBOX"):
+    """Directly poll Gmail inbox and process unread emails — no Pub/Sub required."""
+    if not gmail_handler.service:
+        raise HTTPException(status_code=503, detail="Gmail service not initialised")
+    try:
+        results = gmail_handler.service.users().messages().list(
+            userId="me",
+            labelIds=[label, "UNREAD"],
+            maxResults=max_results,
+        ).execute()
+        msg_refs = results.get("messages", [])
+        if not msg_refs:
+            return {"status": "ok", "found": 0, "queued": 0}
+
+        queued = 0
+        email_list = []
+        messages_to_process = []
+
+        # Collect + mark-read first (avoid re-processing on retry)
+        for ref in msg_refs:
+            message = await gmail_handler.get_message(ref["id"])
+            if message:
+                gmail_handler.service.users().messages().modify(
+                    userId="me", id=ref["id"],
+                    body={"removeLabelIds": ["UNREAD"]}
+                ).execute()
+                messages_to_process.append(message)
+                email_list.append({
+                    "id": ref["id"],
+                    "from": message.get("customer_email"),
+                    "subject": message.get("subject", "")[:80],
+                })
+                queued += 1
+                logger.info("Gmail poll — queued email from %s: %s",
+                            message.get("customer_email"), message.get("subject", "")[:50])
+
+        # Process sequentially in background to avoid Groq rate limits
+        async def _process_sequentially(msgs: list) -> None:
+            import asyncio
+            for msg in msgs:
+                await _process_message_direct(msg)
+                await asyncio.sleep(2)  # small gap between requests
+
+        if messages_to_process:
+            background_tasks.add_task(_process_sequentially, messages_to_process)
+
+        return {"status": "ok", "found": len(msg_refs), "queued": queued, "emails": email_list}
+    except Exception as exc:
+        logger.error("Gmail poll error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 # ---------------------------------------------------------------------------
 # WhatsApp webhooks
 # ---------------------------------------------------------------------------
