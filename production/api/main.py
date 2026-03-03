@@ -61,6 +61,23 @@ async def _process_message_direct(raw_message: dict) -> None:
     await processor.process_message(raw_message)
 
 
+def _write_gmail_credentials() -> None:
+    """Write GMAIL_CREDENTIALS_JSON env var to a file so GmailHandler can load it."""
+    creds_json = os.getenv("GMAIL_CREDENTIALS_JSON")
+    if not creds_json:
+        return
+    import json, tempfile
+    creds_path = "/tmp/gmail-credentials.json"
+    try:
+        json.loads(creds_json)  # validate JSON
+        with open(creds_path, "w") as f:
+            f.write(creds_json)
+        os.environ["GMAIL_CREDENTIALS_PATH"] = creds_path
+        logger.info("Gmail credentials written from env var")
+    except Exception as exc:
+        logger.warning("Failed to write Gmail credentials: %s", exc)
+
+
 async def _auto_migrate() -> None:
     """Apply schema.sql to the database on startup (idempotent — uses IF NOT EXISTS)."""
     from pathlib import Path
@@ -93,6 +110,7 @@ async def _auto_migrate() -> None:
 
 @app.on_event("startup")
 async def startup() -> None:
+    _write_gmail_credentials()
     try:
         await asyncio.wait_for(kafka_producer.start(), timeout=5.0)
         logger.info("Kafka producer connected")
