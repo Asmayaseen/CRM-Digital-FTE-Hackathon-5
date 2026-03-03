@@ -19,7 +19,7 @@ from production.agent.tools import ALL_TOOLS
 
 _model_name = os.getenv("AGENT_MODEL", "gpt-4o")
 _base_url = os.getenv("AGENT_BASE_URL")  # None → uses OpenAI default
-_api_key = os.getenv("GROK_API_KEY") or os.getenv("OPENAI_API_KEY")
+_api_key = os.getenv("GROQ_API_KEY") or os.getenv("GROK_API_KEY") or os.getenv("OPENAI_API_KEY")
 
 if _base_url:
     # Grok (xAI) or any OpenAI-compatible endpoint
