@@ -111,6 +111,9 @@ async def _auto_migrate() -> None:
 @app.on_event("startup")
 async def startup() -> None:
     _write_gmail_credentials()
+    # Re-init gmail_handler AFTER credentials are written to disk
+    global gmail_handler
+    gmail_handler = GmailHandler()
     try:
         await asyncio.wait_for(kafka_producer.start(), timeout=5.0)
         logger.info("Kafka producer connected")
