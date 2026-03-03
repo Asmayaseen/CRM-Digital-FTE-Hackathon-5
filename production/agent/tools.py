@@ -112,8 +112,17 @@ async def search_knowledge_base(input: KnowledgeSearchInput) -> str:
             parts.append(f"**{row['title']}**\n{row['content'][:500]}")
         return "\n\n---\n\n".join(parts)
     except Exception as exc:
-        logger.error("search_knowledge_base failed: %s", exc)
-        return "Knowledge base temporarily unavailable."
+        logger.warning("Vector search failed (%s) — falling back to text search", exc)
+        # Fallback: simple keyword search when fastembed is unavailable
+        try:
+            results = await queries.search_knowledge_base_text(input.query, max_results=input.max_results)
+            if not results:
+                return "No relevant documentation found."
+            parts = [f"**{r['title']}**\n{r['content'][:500]}" for r in results]
+            return "\n\n---\n\n".join(parts)
+        except Exception as exc2:
+            logger.error("Text search also failed: %s", exc2)
+            return "Knowledge base temporarily unavailable."
 
 
 # ---------------------------------------------------------------------------

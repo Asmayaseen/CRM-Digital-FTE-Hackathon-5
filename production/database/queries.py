@@ -359,6 +359,31 @@ async def search_knowledge_base(embedding: list[float],
         return [dict(r) for r in rows]
 
 
+async def search_knowledge_base_text(query: str, max_results: int = 5) -> list[dict]:
+    """Fallback keyword search when vector embeddings are unavailable."""
+    pool = await get_db_pool()
+    # Build keyword tokens from query
+    keywords = [w.strip() for w in query.lower().split() if len(w.strip()) > 2]
+    like_clause = " OR ".join(f"(lower(title) LIKE '%{k}%' OR lower(content) LIKE '%{k}%')"
+                              for k in keywords[:5]) if keywords else "TRUE"
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"""SELECT title, content, category
+                FROM knowledge_base
+                WHERE {like_clause}
+                LIMIT $1""",
+            max_results
+        )
+        if rows:
+            return [dict(r) for r in rows]
+        # If no keyword match, return top entries
+        rows = await conn.fetch(
+            "SELECT title, content, category FROM knowledge_base LIMIT $1",
+            max_results
+        )
+        return [dict(r) for r in rows]
+
+
 async def insert_knowledge_entry(title: str,
                                    content: str,
                                    category: Optional[str],
