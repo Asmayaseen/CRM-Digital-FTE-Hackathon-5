@@ -40,7 +40,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000").split(","),
+    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:4000,http://localhost:8000").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,6 +61,36 @@ async def _process_message_direct(raw_message: dict) -> None:
     await processor.process_message(raw_message)
 
 
+async def _auto_migrate() -> None:
+    """Apply schema.sql to the database on startup (idempotent — uses IF NOT EXISTS)."""
+    from pathlib import Path
+    schema_path = Path(__file__).parent.parent / "database" / "schema.sql"
+    if not schema_path.exists():
+        logger.warning("schema.sql not found — skipping migration")
+        return
+    try:
+        from production.database.queries import get_db_pool
+        schema_sql = schema_path.read_text()
+        pool = await get_db_pool()
+        async with pool.acquire() as conn:
+            # Fix vector dimension if knowledge_base already exists with wrong dim
+            await conn.execute("""
+                DO $$ BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'knowledge_base' AND column_name = 'embedding'
+                        AND character_maximum_length IS NOT NULL
+                    ) THEN
+                        NULL;
+                    END IF;
+                END $$;
+            """)
+            await conn.execute(schema_sql)
+        logger.info("DB migration applied successfully")
+    except Exception as exc:
+        logger.warning("DB migration warning (non-fatal): %s", exc)
+
+
 @app.on_event("startup")
 async def startup() -> None:
     try:
@@ -69,6 +99,7 @@ async def startup() -> None:
     except Exception as exc:
         logger.warning("Kafka unavailable — running without message queue: %s", exc)
         kafka_producer._producer = None  # ensure broken partial-init is cleared
+    await _auto_migrate()
     set_dependencies(kafka_producer, None, _process_message_direct)
     logger.info("FTE API started — all channels active")
 

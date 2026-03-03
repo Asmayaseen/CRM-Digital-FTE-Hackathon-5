@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS knowledge_base (
     title      VARCHAR(500) NOT NULL,
     content    TEXT NOT NULL,
     category   VARCHAR(100),
-    embedding  VECTOR(1536),
+    embedding  VECTOR(384),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
