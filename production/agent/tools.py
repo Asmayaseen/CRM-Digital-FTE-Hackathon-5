@@ -73,6 +73,18 @@ class ResponseInput(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+_embedding_model = None
+
+
+def _get_embedding_model():
+    """Return cached fastembed model — loads once, reused for all requests."""
+    global _embedding_model
+    if _embedding_model is None:
+        from fastembed import TextEmbedding
+        _embedding_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+    return _embedding_model
+
+
 @function_tool
 async def search_knowledge_base(input: KnowledgeSearchInput) -> str:
     """Search CloudSync Pro product documentation for relevant information.
@@ -84,12 +96,10 @@ async def search_knowledge_base(input: KnowledgeSearchInput) -> str:
     """
     try:
         import asyncio
-        from fastembed import TextEmbedding
-        model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
-        # fastembed is synchronous — run in executor to avoid blocking event loop
         loop = asyncio.get_event_loop()
+        # Load model once (cached) and embed — run in executor to avoid blocking event loop
         embeddings = await loop.run_in_executor(
-            None, lambda: list(model.embed([input.query]))
+            None, lambda: list(_get_embedding_model().embed([input.query]))
         )
         embedding = embeddings[0].tolist()
         results = await queries.search_knowledge_base(

@@ -138,6 +138,13 @@ async def startup() -> None:
         logger.warning("Kafka unavailable — running without message queue: %s", exc)
         kafka_producer._producer = None  # ensure broken partial-init is cleared
     await _auto_migrate()
+    # Pre-load fastembed model so first KB search is fast
+    try:
+        from production.agent.tools import _get_embedding_model
+        await asyncio.get_event_loop().run_in_executor(None, _get_embedding_model)
+        logger.info("Fastembed model pre-loaded")
+    except Exception as exc:
+        logger.warning("Fastembed pre-load failed (non-fatal): %s", exc)
     set_dependencies(kafka_producer, None, _process_message_direct)
     logger.info("FTE API started — all channels active")
 
