@@ -63,19 +63,36 @@ async def _process_message_direct(raw_message: dict) -> None:
 
 def _write_gmail_credentials() -> None:
     """Write GMAIL_CREDENTIALS_JSON env var to a file so GmailHandler can load it."""
-    creds_json = os.getenv("GMAIL_CREDENTIALS_JSON")
+    import json, re
+
+    # 1. Try file paths that may already exist (e.g. baked into Docker image)
+    for known_path in [
+        os.getenv("GMAIL_CREDENTIALS_PATH", ""),
+        "/app/credentials/gmail-credentials.json",
+        "./credentials/gmail-credentials.json",
+    ]:
+        if known_path and os.path.exists(known_path):
+            os.environ["GMAIL_CREDENTIALS_PATH"] = known_path
+            logger.info("Gmail credentials found at %s", known_path)
+            return
+
+    # 2. Try to build from GMAIL_CREDENTIALS_JSON env var
+    creds_json = os.getenv("GMAIL_CREDENTIALS_JSON", "").strip()
     if not creds_json:
+        logger.warning("No Gmail credentials found (file or env var)")
         return
-    import json, tempfile
+
+    # Remove newlines/extra spaces that may have been introduced by copy-paste
+    creds_json_clean = re.sub(r'[\r\n]+', '', creds_json)
     creds_path = "/tmp/gmail-credentials.json"
     try:
-        json.loads(creds_json)  # validate JSON
+        json.loads(creds_json_clean)  # validate
         with open(creds_path, "w") as f:
-            f.write(creds_json)
+            f.write(creds_json_clean)
         os.environ["GMAIL_CREDENTIALS_PATH"] = creds_path
-        logger.info("Gmail credentials written from env var")
+        logger.info("Gmail credentials written from GMAIL_CREDENTIALS_JSON env var")
     except Exception as exc:
-        logger.warning("Failed to write Gmail credentials: %s", exc)
+        logger.warning("Failed to write Gmail credentials from env var: %s", exc)
 
 
 async def _auto_migrate() -> None:
