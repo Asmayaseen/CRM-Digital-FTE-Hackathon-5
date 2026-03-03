@@ -15,5 +15,4 @@ context/
 hackathon-5.md
 CLAUDE.md
 *.md
-credentials/
 k8s/secrets.yaml
