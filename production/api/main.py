@@ -147,6 +147,21 @@ async def root():
 # Health
 # ---------------------------------------------------------------------------
 
+@app.get("/debug/gmail")
+async def debug_gmail():
+    """Debug endpoint — shows Gmail credentials state."""
+    import os
+    creds_path = os.getenv("GMAIL_CREDENTIALS_PATH", "NOT SET")
+    creds_json_set = bool(os.getenv("GMAIL_CREDENTIALS_JSON"))
+    file_exists = os.path.exists(creds_path) if creds_path != "NOT SET" else False
+    return {
+        "GMAIL_CREDENTIALS_PATH": creds_path,
+        "GMAIL_CREDENTIALS_JSON_set": creds_json_set,
+        "file_exists": file_exists,
+        "gmail_handler_service": gmail_handler.service is not None,
+    }
+
+
 @app.get("/health")
 async def health_check():
     from production.database.queries import get_db_pool
