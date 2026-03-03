@@ -176,6 +176,7 @@ async def debug_gmail():
         "GMAIL_CREDENTIALS_JSON_set": creds_json_set,
         "file_exists": file_exists,
         "gmail_handler_service": gmail_handler.service is not None,
+        "init_error": getattr(gmail_handler, "_init_error", None),
     }
 
 

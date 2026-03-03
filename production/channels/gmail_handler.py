@@ -22,10 +22,13 @@ logger = logging.getLogger(__name__)
 class GmailHandler:
     def __init__(self, credentials_path: str | None = None) -> None:
         path = credentials_path or os.getenv("GMAIL_CREDENTIALS_PATH", "")
+        self._init_error: str | None = None
         try:
             self.credentials = Credentials.from_authorized_user_file(path)
-            self.service = build("gmail", "v1", credentials=self.credentials)
+            self.service = build("gmail", "v1", credentials=self.credentials,
+                                 cache_discovery=False)
         except Exception as exc:
+            self._init_error = str(exc)
             logger.warning("Gmail credentials not loaded: %s", exc)
             self.service = None
 
